@@ -1,0 +1,26 @@
+id: audit-php
+name: PHP Security Audit
+command: audit-php
+version: "1.0"
+description: >
+  PHP core vulnerability patterns: SQL injection via string concatenation,
+  type juggling loose comparisons, unsafe unserialize(), dangerous functions
+  (eval/exec/system), file inclusion with variables, command injection,
+  XSS via unencoded output, php.ini hardening gaps.
+
+category: static            # static | deps | config | framework | frontend | infra
+
+stack:
+  languages: [php]
+  frameworks: []            # pure language — no framework assumed
+
+triggers:
+  # Skill activates when ANY of these patterns match files in the scan target
+  file_patterns:
+    - "**/*.php"
+    - "php.ini"
+
+output:
+  severity_levels: [Critical, High, Medium, Low]
+  format: grouped_by_severity
+  finding_fields: [file, line, vulnerability_type, snippet, fix]

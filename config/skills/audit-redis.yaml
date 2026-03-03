@@ -1,0 +1,32 @@
+id: audit-redis
+name: Redis Security Audit
+command: audit-redis
+version: "1.0"
+description: >
+  Redis security posture: redis.conf hardening (requirepass, bind,
+  protected-mode, dangerous command renaming), Docker Compose exposure
+  (published port 6379, internal network isolation), Laravel Redis database
+  separation, session encryption, queue deserialization risk
+  (GHSA-m27r-m6rx-mhm4 / CVE-2025-49844 CVSS 10.0), SSRF-to-Redis
+  attack surface, cached data deserialization without allowed_classes.
+
+category: infra
+
+stack:
+  languages: []             # config-level — no specific language
+  frameworks: [laravel]     # checks Laravel Redis integration; redis.conf checks are universal
+
+triggers:
+  file_patterns:
+    - "redis.conf"
+    - "**/redis.conf"
+    - "redis/**"
+    - "docker-compose.yml"
+    - "docker-compose.yaml"
+    - "config/database.php"  # Laravel Redis config
+    - "config/session.php"
+
+output:
+  severity_levels: [Critical, High, Medium, Low]
+  format: risk_summary_then_severity
+  finding_fields: [location, vulnerability, fix]

@@ -35,3 +35,13 @@ build/
 # Logs
 *.log
 logs/
+
+# Python packaging
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Docker volumes (if mounted locally)
+neo4j_data/
+redis_data/

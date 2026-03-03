@@ -1,0 +1,34 @@
+id: audit-laravel
+name: Laravel Security Audit
+command: audit-laravel
+version: "1.0"
+description: >
+  Laravel-specific security patterns: raw query injection (whereRaw/DB::raw),
+  mass assignment ($guarded = []), Blade XSS ({!! !!}), APP_KEY and .env
+  exposure, queue jobs without ShouldBeEncrypted, CORS misconfiguration,
+  JWT algorithm confusion, version-specific CVEs (CVE-2021-3129,
+  CVE-2024-52301, CVE-2024-55556, CVE-2024-13918/19, CVE-2025-27515),
+  session configuration hardening.
+
+category: framework
+
+stack:
+  languages: [php]
+  frameworks: [laravel]
+
+triggers:
+  file_patterns:
+    - "artisan"              # Laravel project root marker
+    - "composer.json"        # refined further by command (checks for laravel/framework)
+    - "app/Http/Controllers/**/*.php"
+    - "app/Models/**/*.php"
+    - "config/app.php"
+    - "config/session.php"
+    - "config/cors.php"
+    - "app/Jobs/**/*.php"
+    - "**/*.blade.php"
+
+output:
+  severity_levels: [Critical, High, Medium, Low]
+  format: grouped_by_severity
+  finding_fields: [file, line, vulnerability_type, snippet, fix]

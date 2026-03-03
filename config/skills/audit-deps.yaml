@@ -1,0 +1,29 @@
+id: audit-deps
+name: Dependency Audit
+command: audit-deps
+version: "1.0"
+description: >
+  Third-party dependency CVE audit: runs composer audit and/or npm/yarn audit
+  depending on what package files are present, parses results, cross-references
+  against known stack CVEs, verifies lockfile integrity, flags missing automated
+  dependency monitoring (Dependabot / Renovate). Works with any combination of
+  PHP (Composer) and JS (npm/yarn/pnpm) projects.
+
+category: deps
+
+stack:
+  languages: [php, javascript]   # activates for either — checked at runtime
+  frameworks: []                 # framework-agnostic; CVE cross-ref is PHP/Laravel/Vue-specific
+
+triggers:
+  # Activates if ANY package manifest is present
+  file_patterns:
+    - "composer.json"
+    - "package.json"
+    - "yarn.lock"
+    - "pnpm-lock.yaml"
+
+output:
+  severity_levels: [Critical, High, Medium, Low]
+  format: summary_table_then_details
+  finding_fields: [package, installed_version, cve, severity, fix_version, upgrade_command]

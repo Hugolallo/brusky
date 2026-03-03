@@ -1,0 +1,35 @@
+id: audit-frontend
+name: Frontend Security Audit (Vue 2 / Nuxt 2)
+command: audit-frontend
+version: "1.0"
+description: >
+  Vue 2 and Nuxt 2 security patterns: XSS via v-html without DOMPurify,
+  client-side template injection (CSTI), CVE-2024-6783 (prototype pollution
+  in Vue 2 template compiler — unpatched), token storage in localStorage,
+  Vue DevTools in production, route guards as false security boundaries,
+  publicRuntimeConfig secret exposure, asyncData SSR XSS
+  (serialize-javascript CVE-2019-16769/72), nuxtServerInit sensitive store
+  data, missing security headers, @nuxtjs/proxy SSRF, Axios credentials
+  configuration. EOL status: Vue 2 (Dec 2023), Nuxt 2 (Jun 2024).
+
+category: frontend
+
+stack:
+  languages: [javascript]
+  frameworks: [vue2, nuxt2]
+
+triggers:
+  file_patterns:
+    - "**/*.vue"
+    - "nuxt.config.js"
+    - "nuxt.config.ts"
+    - "pages/**/*.vue"
+    - "components/**/*.vue"
+    - "plugins/axios.js"
+    - "router/index.js"
+    - "store/**/*.js"
+
+output:
+  severity_levels: [Critical, High, Medium, Low]
+  format: grouped_vue_then_nuxt
+  finding_fields: [file, line, vulnerability_type, snippet, fix]
