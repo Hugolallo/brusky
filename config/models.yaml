@@ -23,14 +23,18 @@ default:
 # ── Phase 01: World Model ──────────────────────────────────────────────────────
 # Agents that classify and map the codebase. Moderate reasoning needed.
 world_model:
+  service_discoverer:
+    model: claude-haiku-4-5-20251001    # structured JSON extraction from file contents
+    temperature: 0.0
+    max_tokens: 256
   sensitivity_classifier:
     model: claude-haiku-4-5-20251001    # fast + cheap — simple classification task
     temperature: 0.0
     max_tokens: 512
   attack_surface_mapper:
-    model: claude-sonnet-4-6
+    model: claude-haiku-4-5-20251001    # classification + entry point list — haiku is sufficient
     temperature: 0.0
-    max_tokens: 2048
+    max_tokens: 512
 
 # ── Phase 02: Analysis ─────────────────────────────────────────────────────────
 # Blackboard-style specialists. Static and config agents are deterministic;

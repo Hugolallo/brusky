@@ -36,7 +36,11 @@ log = structlog.get_logger()
 # ── Data shapes ────────────────────────────────────────────────────────────────
 
 class Service:
-    __slots__ = ("name", "purpose", "language", "team", "sensitivity", "exposure", "repo_path")
+    __slots__ = (
+        "name", "purpose", "language", "team",
+        "sensitivity", "exposure", "repo_path",
+        "data_types", "entry_points",
+    )
 
     def __init__(
         self,
@@ -44,9 +48,11 @@ class Service:
         purpose: str = "",
         language: str = "",
         team: str = "",
-        sensitivity: str = "medium",   # critical | high | medium | low
-        exposure: str = "internal",    # public | internal | admin
+        sensitivity: str = "medium",    # critical | high | medium | low
+        exposure: str = "internal",     # public | internal | admin
         repo_path: str = "",
+        data_types: list[str] | None = None,    # e.g. ["PII", "auth_tokens"]
+        entry_points: list[str] | None = None,  # e.g. ["GET /api/* [public]"]
     ) -> None:
         self.name = name
         self.purpose = purpose
@@ -55,6 +61,8 @@ class Service:
         self.sensitivity = sensitivity
         self.exposure = exposure
         self.repo_path = repo_path
+        self.data_types: list[str] = data_types or []
+        self.entry_points: list[str] = entry_points or []
 
 
 class Finding:
@@ -169,6 +177,8 @@ class GraphClient:
                     svc.sensitivity = $sensitivity,
                     svc.exposure = $exposure,
                     svc.repo_path = $repo_path,
+                    svc.data_types = $data_types,
+                    svc.entry_points = $entry_points,
                     svc.updated_at = $now
                 """,
                 name=service.name,
@@ -178,22 +188,80 @@ class GraphClient:
                 sensitivity=service.sensitivity,
                 exposure=service.exposure,
                 repo_path=service.repo_path,
+                data_types=service.data_types,
+                entry_points=service.entry_points,
                 now=_now(),
             )
 
-    async def add_service_dependency(self, from_service: str, to_service: str, rel_type: str = "CALLS") -> None:
-        """Record that one service calls / depends on another."""
+    async def update_service_sensitivity(
+        self,
+        service_name: str,
+        sensitivity: str,
+        data_types: list[str],
+    ) -> None:
+        """Update sensitivity classification on an existing service node."""
+        async with self._session() as s:
+            await s.run(
+                """
+                MATCH (svc:Service {name: $name})
+                SET svc.sensitivity = $sensitivity,
+                    svc.data_types = $data_types,
+                    svc.updated_at = $now
+                """,
+                name=service_name,
+                sensitivity=sensitivity,
+                data_types=data_types,
+                now=_now(),
+            )
+
+    async def update_service_exposure(
+        self,
+        service_name: str,
+        exposure: str,
+        entry_points: list[str],
+    ) -> None:
+        """Update exposure classification and entry points on an existing service node."""
+        async with self._session() as s:
+            await s.run(
+                """
+                MATCH (svc:Service {name: $name})
+                SET svc.exposure = $exposure,
+                    svc.entry_points = $entry_points,
+                    svc.updated_at = $now
+                """,
+                name=service_name,
+                exposure=exposure,
+                entry_points=entry_points,
+                now=_now(),
+            )
+
+    async def add_service_calls(self, from_service: str, to_service: str) -> None:
+        """Record that from_service makes runtime HTTP calls to to_service."""
         async with self._session() as s:
             await s.run(
                 """
                 MATCH (a:Service {name: $from_name})
                 MATCH (b:Service {name: $to_name})
-                MERGE (a)-[r:$rel_type]->(b)
+                MERGE (a)-[r:CALLS]->(b)
                 SET r.updated_at = $now
                 """,
                 from_name=from_service,
                 to_name=to_service,
-                rel_type=rel_type,
+                now=_now(),
+            )
+
+    async def add_service_depends_on(self, from_service: str, to_service: str) -> None:
+        """Record that from_service depends on to_service at startup (docker-compose)."""
+        async with self._session() as s:
+            await s.run(
+                """
+                MATCH (a:Service {name: $from_name})
+                MATCH (b:Service {name: $to_name})
+                MERGE (a)-[r:DEPENDS_ON]->(b)
+                SET r.updated_at = $now
+                """,
+                from_name=from_service,
+                to_name=to_service,
                 now=_now(),
             )
 
