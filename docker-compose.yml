@@ -73,8 +73,15 @@ services:
       MISTRAL_API_KEY: "${MISTRAL_API_KEY:-}"
       # Ollama — use this when running a local model
       OLLAMA_API_BASE: "${OLLAMA_API_BASE:-}"
+      # Bitbucket integration
+      BITBUCKET_WEBHOOK_SECRET: "${BITBUCKET_WEBHOOK_SECRET:-}"
+      BITBUCKET_ACCESS_TOKEN: "${BITBUCKET_ACCESS_TOKEN:-}"
+      BITBUCKET_WORKSPACE: "${BITBUCKET_WORKSPACE:-}"
+      # Output channels
+      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
     volumes:
       - ./config:/app/config:ro
+      - ./.claude/commands:/app/.claude/commands:ro   # skill prompts
       - ./src:/app/src:ro          # hot-reload in dev
       - scan_output:/app/output
     ports:

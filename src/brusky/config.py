@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     slack_webhook_url: str = Field("", alias="SLACK_WEBHOOK_URL")
     github_token: str = Field("", alias="GITHUB_TOKEN")
 
+    # Bitbucket integration
+    bitbucket_webhook_secret: str = Field("", alias="BITBUCKET_WEBHOOK_SECRET")
+    bitbucket_access_token: str = Field("", alias="BITBUCKET_ACCESS_TOKEN")
+    bitbucket_workspace: str = Field("", alias="BITBUCKET_WORKSPACE")
+
     brusky_env: str = Field("development", alias="BRUSKY_ENV")
 
 
