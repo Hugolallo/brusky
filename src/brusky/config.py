@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     # Output channels
     slack_webhook_url: str = Field("", alias="SLACK_WEBHOOK_URL")
     github_token: str = Field("", alias="GITHUB_TOKEN")
+    pagerduty_api_key: str = Field("", alias="PAGERDUTY_API_KEY")
 
     # Bitbucket integration
     bitbucket_webhook_secret: str = Field("", alias="BITBUCKET_WEBHOOK_SECRET")

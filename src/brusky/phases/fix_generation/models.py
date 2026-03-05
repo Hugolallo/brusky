@@ -43,6 +43,10 @@ class EnrichedFix:
     references: list[str]
     related_finding_ids: list[str]
 
+    # Source location — needed by Phase 05 for regression detection + PR comments
+    file: str = ""
+    line: int = 0
+
     # Pass-through from Phase 03 for Phase 05 routing
     attack_path: str = ""
     entry_point: str | None = None

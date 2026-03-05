@@ -79,6 +79,7 @@ services:
       BITBUCKET_WORKSPACE: "${BITBUCKET_WORKSPACE:-}"
       # Output channels
       SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+      PAGERDUTY_API_KEY: "${PAGERDUTY_API_KEY:-}"
     volumes:
       - ./config:/app/config:ro
       - ./.claude/commands:/app/.claude/commands:ro   # skill prompts

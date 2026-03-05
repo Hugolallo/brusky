@@ -153,6 +153,8 @@ async def run_fix_generation(
             developer_note=note,
             references=references,
             related_finding_ids=related_ids,
+            file=finding.file,
+            line=finding.line,
             attack_path=finding.attack_context.attack_path,
             entry_point=finding.attack_context.entry_point,
             business_impact=finding.business_impact,
