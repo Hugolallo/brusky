@@ -37,6 +37,11 @@ litellm.set_verbose = False
 
 Message = dict[str, str]   # {"role": "user"|"assistant"|"system", "content": str}
 
+# Extra generation options forwarded to the model when present in models.yaml.
+# Mostly for local providers (Ollama): num_ctx sizes the context window, format
+# forces structured output ("json"), seed makes runs reproducible.
+_PASSTHROUGH_PARAMS = ("num_ctx", "num_predict", "top_p", "seed", "stop", "format")
+
 
 @dataclass
 class LLMResponse:
@@ -173,13 +178,24 @@ class LLMProvider:
         params: dict[str, Any] = {
             "model": self._model_str,
             "messages": messages,
-            "temperature": temperature if temperature is not None else self._cfg.get("temperature", 0.1),
-            "max_tokens": max_tokens if max_tokens is not None else self._cfg.get("max_tokens", 4096),
+            "temperature": (
+                temperature if temperature is not None else self._cfg.get("temperature", 0.1)
+            ),
+            "max_tokens": (
+                max_tokens if max_tokens is not None else self._cfg.get("max_tokens", 4096)
+            ),
         }
 
         # Ollama needs api_base
         if api_base := self._cfg.get("api_base"):
             params["api_base"] = api_base
+
+        # Pass through extra generation options when set in models.yaml.
+        # num_ctx is important for local (Ollama) models — the default context
+        # is small and silently truncates long prompts (e.g. changelogs).
+        for key in _PASSTHROUGH_PARAMS:
+            if (value := self._cfg.get(key)) is not None:
+                params[key] = value
 
         # Azure needs extra params
         if self._cfg.get("provider") == "azure":

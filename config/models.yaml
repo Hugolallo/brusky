@@ -1,124 +1,46 @@
 # ── Brusky — model configuration ──────────────────────────────────────────────
-# This file controls which LLM provider and model each agent uses.
-# Environment variables (LLM_PROVIDER, LLM_MODEL) act as a fallback if no
-# specific override is defined here.
+# The only LLM use in Brusky is the optional M3 explainer + fix-guidance layer
+# (`fix_guidance.advisor`). Detection is deterministic and needs no model.
+# This file is read only when that layer runs; with no provider configured the
+# report renders exactly the same.
+#
+# Resolution order for an agent's config (highest priority first):
+#   1. this file → <phase>.<agent>      (e.g. fix_guidance.advisor)
+#   2. this file → default
+#   3. env vars LLM_PROVIDER / LLM_MODEL
 #
 # Supported providers (via LiteLLM):
 #   anthropic  → claude-sonnet-4-6 | claude-opus-4-6 | claude-haiku-4-5-20251001
-#   openai     → gpt-4o | gpt-4o-mini | gpt-4-turbo
-#   groq       → llama3-70b-8192 | mixtral-8x7b-32768
-#   mistral    → mistral-large-latest | mistral-small-latest
-#   ollama     → llama3:70b | codellama:34b | mistral:7b (local, no API key)
+#   openai     → gpt-4o | gpt-4o-mini
+#   ollama     → qwen2.5-coder:32b | mistral-small (local, no API key)
 #   azure      → azure/<your-deployment-name>
-#   bedrock    → bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Default model — used for any agent without a specific override
+# Fallback for any agent without a specific override below.
 default:
   provider: anthropic
   model: claude-sonnet-4-6
   temperature: 0.1
   max_tokens: 4096
 
-# ── Phase 01: World Model ──────────────────────────────────────────────────────
-# Agents that classify and map the codebase. Moderate reasoning needed.
-world_model:
-  service_discoverer:
-    model: claude-haiku-4-5-20251001    # structured JSON extraction from file contents
-    temperature: 0.0
-    max_tokens: 256
-  sensitivity_classifier:
-    model: claude-haiku-4-5-20251001    # fast + cheap — simple classification task
-    temperature: 0.0
-    max_tokens: 512
-  attack_surface_mapper:
-    model: claude-haiku-4-5-20251001    # classification + entry point list — haiku is sufficient
-    temperature: 0.0
-    max_tokens: 512
-
-# ── Phase 02: Analysis ─────────────────────────────────────────────────────────
-# Blackboard-style specialists. Static and config agents are deterministic;
-# logic flaw detection needs the most capable model.
-analysis:
-  controller:
-    model: claude-haiku-4-5-20251001    # routing decision — cheap + fast
-    temperature: 0.0
-    max_tokens: 256
-  static_analyser:
-    model: claude-sonnet-4-6
-    temperature: 0.0
-    max_tokens: 4096
-  dependency_auditor:
-    model: claude-haiku-4-5-20251001    # structured CVE lookup — no deep reasoning
-    temperature: 0.0
-    max_tokens: 2048
-  logic_flaw_detector:
-    model: claude-opus-4-6              # hardest task — needs best model
+# ── M3: explainer + fix guidance ───────────────────────────────────────────────
+# `advisor` turns (advisory + real changelog + real call sites) into a structured
+# explainer and upgrade guidance. A grounded summarize-and-format task, well
+# within a 14B+ local coder model.
+#
+# Running locally on Ollama. num_ctx must be large enough to fit the changelog
+# (Ollama's default is small and truncates the prompt silently); format: json
+# forces valid structured output. Set OLLAMA_API_BASE in your environment.
+fix_guidance:
+  advisor:
+    provider: ollama
+    model: qwen2.5-coder:32b
     temperature: 0.1
-    max_tokens: 8192
-  config_secrets_agent:
-    model: claude-sonnet-4-6
-    temperature: 0.0
-    max_tokens: 4096
-
-# ── Phase 03: Exploitability ───────────────────────────────────────────────────
-# Mental loop — simulate attack paths. High-stakes reasoning.
-exploitability:
-  attack_path_simulator:
-    model: claude-sonnet-4-6
-    temperature: 0.2                    # slight creativity for attack scenario generation
-    max_tokens: 4096
-  business_impact_assessor:
-    model: claude-haiku-4-5-20251001    # deterministic scoring matrix — no deep reasoning
-    temperature: 0.0
-    max_tokens: 512
-  reachability_validator:
-    model: claude-haiku-4-5-20251001    # pure logic against world model data
-    temperature: 0.0
-    max_tokens: 512
-  mitigating_controls_validator:
-    model: claude-haiku-4-5-20251001    # structured binary check
-    temperature: 0.0
-    max_tokens: 512
-  severity_scorer:
-    model: claude-sonnet-4-6
-    temperature: 0.0
-    max_tokens: 1024
-
-# ── Phase 04: Fix Generation ───────────────────────────────────────────────────
-# Generates actual code patches + reflection. Needs strong code understanding.
-fix_generation:
-  fix_drafter:
-    model: claude-sonnet-4-6
-    temperature: 0.1
-    max_tokens: 8192
-  fix_validator:
-    model: claude-sonnet-4-6
-    temperature: 0.0
-    max_tokens: 2048
-  context_enricher:
-    model: claude-haiku-4-5-20251001    # structured enrichment — cheap
-    temperature: 0.0
-    max_tokens: 1024
-
-# ── Phase 05: Memory & Routing ─────────────────────────────────────────────────
-# Graph queries + output routing. Minimal LLM usage.
-memory_routing:
-  regression_detector:
-    model: claude-haiku-4-5-20251001
-    temperature: 0.0
-    max_tokens: 512
+    max_tokens: 1500
+    num_ctx: 8192
+    format: json
 
 # ── Retry / resilience ─────────────────────────────────────────────────────────
 retry:
   max_attempts: 3
   wait_seconds: 2
-  fallback_model: claude-haiku-4-5-20251001   # used if primary model fails
-
-# ── Ollama example override (uncomment to use local models) ───────────────────
-# default:
-#   provider: ollama
-#   model: llama3:70b
-#   temperature: 0.1
-#   max_tokens: 4096
-#   api_base: http://host.docker.internal:11434
