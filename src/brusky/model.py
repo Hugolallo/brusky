@@ -80,7 +80,11 @@ class Vulnerability:
         for ref in self.references:
             if "github.com/advisories" in ref or "/GHSA-" in ref:
                 return ref
-        return f"https://osv.dev/vulnerability/{self.id}"
+        # OSV-style ids resolve on osv.dev; synthetic ids (EOL-, UNPINNED-) link
+        # to their own source via the first reference.
+        if self.id.startswith(("GHSA", "CVE")):
+            return f"https://osv.dev/vulnerability/{self.id}"
+        return self.references[0] if self.references else f"https://osv.dev/vulnerability/{self.id}"
 
 
 @dataclass

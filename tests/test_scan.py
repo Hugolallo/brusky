@@ -29,6 +29,20 @@ def test_second_scan_reports_no_new(npm_app, mock_osv, tmp_path):
     assert all(f.status == "EXISTING" for f in second.findings)
 
 
+def test_scan_docker_eol_and_unpinned(docker_app, mock_osv, mock_eol, tmp_path):
+    with State(tmp_path / "state.db") as st:
+        result = run_scan(
+            docker_app, enabled={"docker"}, state=st, osv=mock_osv, eol=mock_eol
+        )
+
+    assert result.ecosystems == ["docker"]
+    keys = {f.key for f in result.findings}
+    assert "Docker:node:EOL-node-16" in keys      # EOL base image
+    assert "Docker:nginx:UNPINNED-nginx" in keys  # floating tag
+    # EOL (HIGH) ranks above UNPINNED (MEDIUM)
+    assert result.ranked()[0].vuln.id == "EOL-node-16"
+
+
 def test_no_lockfile_reports_error(tmp_path, mock_osv):
     with State(tmp_path / "state.db") as st:
         result = run_scan(tmp_path, state=st, osv=mock_osv)

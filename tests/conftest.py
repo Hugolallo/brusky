@@ -8,9 +8,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-from brusky.advisories import OSVClient
+from brusky.advisories import EOLClient, OSVClient
 
 FIXTURES = Path(__file__).parent / "fixtures"
+TODAY = "2026-06-30"
 
 # Canned OSV vuln details keyed by id. Only lodash@4.17.4 and guzzle@6.5.0 are
 # "vulnerable"; everything else queries clean.
@@ -89,3 +90,34 @@ def npm_app() -> Path:
 @pytest.fixture
 def composer_app() -> Path:
     return FIXTURES / "composer-app"
+
+
+@pytest.fixture
+def docker_app() -> Path:
+    return FIXTURES / "docker-app"
+
+
+# endoflife.date mock — node 16 is EOL, 20 is supported.
+# Keyed by endoflife slug ("node" image resolves to the "nodejs" product).
+_EOL_PRODUCTS = {
+    "nodejs": [
+        {"cycle": "20", "eol": "2027-04-30"},
+        {"cycle": "18", "eol": "2025-04-30"},
+        {"cycle": "16", "eol": "2023-09-11"},
+    ],
+}
+
+
+def _eol_handler(request: httpx.Request) -> httpx.Response:
+    product = request.url.path.removeprefix("/api/").removesuffix(".json")
+    cycles = _EOL_PRODUCTS.get(product)
+    if cycles is None:
+        return httpx.Response(404)
+    return httpx.Response(200, json=cycles)
+
+
+@pytest.fixture
+def mock_eol() -> EOLClient:
+    transport = httpx.MockTransport(_eol_handler)
+    client = httpx.Client(base_url="https://endoflife.date", transport=transport)
+    return EOLClient(client=client, today=TODAY)

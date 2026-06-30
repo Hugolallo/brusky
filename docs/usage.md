@@ -18,8 +18,10 @@ brusky scan [PATH]
 ```
 
 `PATH` defaults to the current directory. Brusky auto-detects which ecosystems
-apply by looking for lockfiles (`composer.lock`, `package-lock.json`) and scans
-each one it finds.
+apply by looking for `composer.lock`, `package-lock.json`, and `Dockerfile`(s),
+and scans each one it finds. Package vulnerabilities come from OSV.dev; Docker
+base-image freshness (EOL cycles, unpinned `latest` tags) comes from
+endoflife.date.
 
 ### Options
 

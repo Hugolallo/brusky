@@ -75,11 +75,15 @@ Full reference: [docs/usage.md](docs/usage.md).
 
 ## Supported ecosystems
 
-| Ecosystem | Reads | OSV name | Status |
+| Ecosystem | Reads | Advisory source | Status |
 |---|---|---|---|
-| **Composer** (PHP) | `composer.lock` + `composer.json` | `Packagist` | ✅ |
-| **npm** (JS/TS) | `package-lock.json` (v1 / v2 / v3) | `npm` | ✅ |
-| **Docker** base images | `Dockerfile` `FROM` freshness | — | 🔜 M2 |
+| **Composer** (PHP) | `composer.lock` + `composer.json` | OSV.dev (`Packagist`) | ✅ |
+| **npm** (JS/TS) | `package-lock.json` (v1 / v2 / v3) | OSV.dev (`npm`) | ✅ |
+| **Docker** base images | `Dockerfile` `FROM` instructions | endoflife.date | ✅ |
+
+Docker support flags **end-of-life** base-image cycles (no more security
+patches) and **unpinned** `latest` tags; digest-pinned images are treated as
+good practice. Full image CVE scanning (Trivy) is a later milestone.
 
 Adding an ecosystem is a new **collector**; changing the vulnerability source is
 a new **advisory** driver. See [docs/architecture.md](docs/architecture.md#the-two-driver-families).
@@ -126,7 +130,7 @@ More (system cron, exit codes, state management): [docs/usage.md](docs/usage.md)
 | Milestone | Scope | Status |
 |---|---|---|
 | **M1** | Composer + npm collectors, OSV + CVSS, SQLite diff, Markdown/JSON report, CLI | ✅ Done |
-| **M2** | Docker base-image freshness, EOL data, dev-dep/reachability deprioritization | Planned |
+| **M2** | Docker base-image freshness (endoflife.date), dev-dep/reachability deprioritization | ✅ Done |
 | **M3** | LLM fix guidance — changelog fetch + call-site grep + advisor with confidence and source links | Planned |
 | **M4** | Packaging polish: example config, docs finalization | In progress |
 

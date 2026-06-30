@@ -47,8 +47,10 @@ orthogonal concerns. Brusky models each as its own pluggable driver family:
 | **Collectors** | Where state is *read from* | "what is installed, and at what exact version?" | `collectors/` |
 | **Advisories** | Where vuln *truth comes from* | "is this version known-vulnerable?" | `advisories/` |
 
-Adding an ecosystem (e.g. PyPI) is a new collector; changing the source of truth
-(e.g. adding GitHub Advisory) is a new advisory driver. They compose freely.
+The two families are independent: `scan.py` routes each ecosystem to the
+advisory driver that knows it (npm/Packagist → OSV.dev, Docker → endoflife.date),
+so adding an ecosystem is a new collector and changing a source of truth is a new
+advisory driver. They compose freely.
 
 ## Modules
 
@@ -60,11 +62,13 @@ All under `src/brusky/`:
 | `collectors/base.py` | `Collector` protocol + a registry (`register`, `active_collectors`). |
 | `collectors/composer.py` | Parses `composer.lock` (+ `composer.json` for direct/dev), ecosystem `Packagist`. |
 | `collectors/npm.py` | Parses `package-lock.json` v1 and v2/v3 formats, ecosystem `npm`. |
-| `advisories/osv.py` | OSV.dev client (batch query → per-id detail, cached) + CVSS v3.1 base-score calculator. |
-| `prioritize.py` | Pairs deps with their vulns into `Finding`s. Ranking lives on the model. |
+| `collectors/docker.py` | Parses `Dockerfile` `FROM` instructions into base-image refs, ecosystem `Docker`. Skips internal stage aliases and `scratch`. |
+| `advisories/osv.py` | OSV.dev client (batch query → per-id detail, cached) + CVSS v3.1 base-score calculator. Judges `npm` + `Packagist`. |
+| `advisories/eol.py` | endoflife.date client. Flags EOL base-image cycles (HIGH) and unpinned `latest` tags (MEDIUM). Judges `Docker`. |
+| `prioritize.py` | Pairs deps with their vulns into `Finding`s and tags reachability (dev deps → not reachable). Ranking lives on the model. |
 | `state.py` | SQLite baseline. `classify()` sets NEW/WORSENED/EXISTING; `record()` persists. |
 | `report.py` | Renders `ScanResult` to Markdown (NEW-first, backlog collapsed) or JSON. |
-| `scan.py` | `run_scan()` — wires collect → match → diff into a `ScanResult`. |
+| `scan.py` | `run_scan()` — wires collect → match → diff into a `ScanResult`. `_match_advisories()` routes each ecosystem to its advisory driver (OSV vs. endoflife) and merges results. |
 | `__main__.py` | The `brusky` CLI. Routes logs to stderr so stdout stays clean. |
 | `llm/provider.py` | Salvaged LiteLLM wrapper, reserved for the M3 fix-guidance layer. |
 | `config.py` | Pydantic settings (LLM keys + `GITHUB_TOKEN`) and `models.yaml` loading. |

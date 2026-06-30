@@ -13,12 +13,16 @@ from pathlib import Path
 import structlog
 
 from brusky import collectors
-from brusky.advisories import OSVClient
-from brusky.model import ScanResult
+from brusky.advisories import EOLClient, OSVClient
+from brusky.model import ResolvedDep, ScanResult, Vulnerability
 from brusky.prioritize import assemble
 from brusky.state import State
 
 log = structlog.get_logger()
+
+# Which advisory driver judges which ecosystem.
+_OSV_ECOSYSTEMS = {"npm", "Packagist"}
+_EOL_ECOSYSTEMS = {"Docker"}
 
 
 def run_scan(
@@ -27,11 +31,13 @@ def run_scan(
     enabled: set[str] | None = None,
     state: State | None = None,
     osv: OSVClient | None = None,
+    eol: EOLClient | None = None,
 ) -> ScanResult:
     """Scan `target` and return a diffed, ranked ScanResult.
 
     `enabled` filters which ecosystem collectors run (None = all detected).
-    `state` and `osv` are injectable for testing; created/closed here otherwise.
+    `state`, `osv`, and `eol` are injectable for testing; created/closed here
+    otherwise.
     """
     target = target.resolve()
     now = datetime.now(UTC).isoformat(timespec="seconds")
@@ -39,7 +45,9 @@ def run_scan(
 
     active = collectors.active_collectors(target, enabled)
     if not active:
-        result.errors.append("No supported lockfiles found (composer.lock / package-lock.json).")
+        result.errors.append(
+            "No supported manifests found (composer.lock / package-lock.json / Dockerfile)."
+        )
         return result
     result.ecosystems = [c.name for c in active]
 
@@ -53,14 +61,7 @@ def run_scan(
     if not deps:
         return result
 
-    owns_osv = osv is None
-    osv = osv or OSVClient()
-    try:
-        vuln_map = osv.find_vulnerabilities(deps)
-    finally:
-        if owns_osv:
-            osv.close()
-
+    vuln_map = _match_advisories(deps, osv, eol)
     result.findings = assemble(deps, vuln_map)
 
     owns_state = state is None
@@ -73,3 +74,39 @@ def run_scan(
             state.close()
 
     return result
+
+
+def _match_advisories(
+    deps: list[ResolvedDep],
+    osv: OSVClient | None,
+    eol: EOLClient | None,
+) -> dict[str, list[Vulnerability]]:
+    """Route each ecosystem to its advisory driver and merge the results.
+
+    OSV.dev judges package ecosystems; endoflife.date judges Docker base images.
+    Clients are created on demand only when there are deps that need them, so a
+    project with no Dockerfile never touches endoflife.date (and vice versa).
+    """
+    osv_deps = [d for d in deps if d.ecosystem in _OSV_ECOSYSTEMS]
+    eol_deps = [d for d in deps if d.ecosystem in _EOL_ECOSYSTEMS]
+    vuln_map: dict[str, list[Vulnerability]] = {}
+
+    if osv_deps:
+        owns = osv is None
+        osv = osv or OSVClient()
+        try:
+            vuln_map.update(osv.find_vulnerabilities(osv_deps))
+        finally:
+            if owns:
+                osv.close()
+
+    if eol_deps:
+        owns = eol is None
+        eol = eol or EOLClient()
+        try:
+            vuln_map.update(eol.check(eol_deps))
+        finally:
+            if owns:
+                eol.close()
+
+    return vuln_map

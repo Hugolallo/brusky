@@ -91,6 +91,6 @@ out-detect the incumbents.
 | Milestone | Scope | Status |
 |---|---|---|
 | **M1** | Deterministic core: composer + npm collectors, OSV client + CVSS, SQLite diff, Markdown/JSON report, CLI | ✅ Done, tested vs live OSV |
-| **M2** | Docker base-image freshness, EOL data, dev-dep/reachability deprioritization, CI cron workflow | Planned |
+| **M2** | Docker base-image freshness (endoflife.date), dev-dep/reachability deprioritization | ✅ Done, tested vs live endoflife.date |
 | **M3** | LLM fix guidance: changelog fetch + call-site grep + advisor (confidence + source links) | Planned |
 | **M4** | Packaging polish: `brusky.example.yml` rewrite, README/docs finalization, retire old `docs-local/` + audit skills | In progress |
