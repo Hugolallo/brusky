@@ -1,224 +1,156 @@
 # Brusky
 
-A stack-agnostic security defense agent. It scans codebases for vulnerabilities using a plugin-style skill system — you tell it which stacks to understand by dropping in skill files, and it figures out which ones to run based on what's in the target directory.
-
----
-
-## How it works
-
-Brusky runs a 5-phase pipeline:
-
-| Phase | What it does |
-|---|---|
-| 01 World Model | Builds a Neo4j knowledge graph of the codebase — services, dependencies, exposure, sensitivity |
-| 02 Analysis | Discovers and dispatches audit skills via blackboard; each skill scans one layer |
-| 03 Exploitability | Simulates attack paths before scoring — eliminates false positives |
-| 04 Fix Generation | Generates actual code patches, reflects on them before output |
-| 05 Memory & Routing | Detects regressions, writes findings to the graph, routes to output channels |
-
-The agent runs on **Neo4j** (graph memory) + **Redis** (inter-agent blackboard state), orchestrated via Docker.
-
----
-
-## Skills
-
-Skills are the audit modules. Each skill is two files:
-
-| File | Purpose |
-|---|---|
-| `config/skills/<id>.yaml` | Manifest — declares what triggers the skill and what it checks |
-| `.claude/commands/<id>.md` | Audit prompt — the actual vulnerability checks |
-
-The orchestrator (`/audit-stack`) reads all manifests, globs the target directory, and runs only the skills whose trigger patterns match. **It never hardcodes a stack.**
-
-### Built-in skills
-
-| Skill | Command | Triggers on | Checks |
-|---|---|---|---|
-| PHP | `/audit-php` | `**/*.php`, `php.ini` | SQLi, type juggling, unserialize, dangerous functions, LFI, XSS |
-| Laravel | `/audit-laravel` | `artisan`, `**/*.blade.php`, `app/Jobs/**` | Raw queries, mass assignment, Blade XSS, APP_KEY, queue encryption, CORS, CVEs |
-| Redis | `/audit-redis` | `redis.conf`, `docker-compose.yml`, `config/database.php` | Auth, bind, protected-mode, port exposure, DB separation, deserialization |
-| Vue 2 / Nuxt 2 | `/audit-frontend` | `**/*.vue`, `nuxt.config.js` | v-html XSS, CSTI, CVE-2024-6783, localStorage tokens, SSR XSS, headers |
-| Dependencies | `/audit-deps` | `composer.json`, `package.json`, `yarn.lock` | composer audit, npm audit, lockfile integrity, stack-specific CVE cross-reference |
-
----
-
-## Adding a skill for a new stack
-
-Two files. Nothing else needs to change — the orchestrator picks them up automatically.
-
-### Step 1 — create the manifest
-
-Create `config/skills/audit-<stack>.yaml`:
-
-```yaml
-id: audit-<stack>
-name: <Stack> Security Audit
-command: audit-<stack>
-version: "1.0"
-description: >
-  One or two sentences describing what this skill checks.
-
-category: framework   # static | deps | config | framework | frontend | infra
-
-stack:
-  languages: [python]           # languages this skill covers
-  frameworks: [django]          # frameworks (empty [] if pure language)
-
-triggers:
-  # Skill activates when ANY of these glob patterns match files in the target.
-  # Use ** for any depth, * for any filename segment.
-  file_patterns:
-    - "manage.py"               # Django project root marker
-    - "**/*.py"
-    - "requirements.txt"
-    - "requirements/**/*.txt"
-
-output:
-  severity_levels: [Critical, High, Medium, Low]
-  format: grouped_by_severity
-  finding_fields: [file, line, vulnerability_type, snippet, fix]
-```
-
-**Category values:**
-
-| Category | Use for |
-|---|---|
-| `static` | Language-level patterns (SQLi, XSS, dangerous functions) |
-| `framework` | Framework-specific patterns (ORM misuse, middleware gaps) |
-| `deps` | Package manager CVE audits |
-| `infra` | Databases, caches, message queues, config files |
-| `frontend` | Browser-side code (JS frameworks, CSP, token storage) |
-| `config` | CI/CD, Kubernetes, Terraform, env files |
-
-### Step 2 — create the audit prompt
-
-Create `.claude/commands/audit-<stack>.md`:
-
-```markdown
-# <Stack> Security Audit
-
-Perform a security audit of `$ARGUMENTS` (defaults to current directory).
-
-## Instructions
-
-You are a security auditor scanning a <Stack> codebase for vulnerabilities.
-All audit knowledge is contained in this skill file.
-
-For each finding, report:
-- **File and line number** (as a clickable link)
-- **Severity**: Critical / High / Medium / Low
-- **Vulnerability type**
-- **Vulnerable code snippet**
-- **Recommended fix**
-
----
-
-### 1. <Vulnerability class>
-<Description of what to search for and how to flag it>
-
-### 2. <Vulnerability class>
-...
-
----
-
-## Output Format
-
-Group findings by severity (Critical first). Summarize with a count per severity at the end.
-```
-
-### Step 3 — verify
-
-Run `/audit-stack /path/to/a-<stack>-project` and confirm your skill appears in the scope detection table as ACTIVE.
-
----
-
-### Examples for common stacks
-
-<details>
-<summary>Django / Python</summary>
-
-**Trigger patterns:** `manage.py`, `**/*.py`, `requirements.txt`
-**Key checks:** raw SQL via `cursor.execute()` with string format, `ALLOWED_HOSTS = ['*']`, `DEBUG = True` in settings, `SECRET_KEY` in source, missing CSRF middleware, `eval()`/`exec()` on user input, unsafe deserialization via `pickle`
-
-</details>
-
-<details>
-<summary>Rails / Ruby</summary>
-
-**Trigger patterns:** `Gemfile`, `config/routes.rb`, `**/*.rb`
-**Key checks:** `ActiveRecord::Base.where("#{params[...]}")`, `render inline:`, `send(params[:method])`, mass assignment without `permit`, `Marshal.load` on user input, `RAILS_ENV` exposure
-
-</details>
-
-<details>
-<summary>Express / Node.js</summary>
-
-**Trigger patterns:** `package.json`, `**/*.js`, `**/*.ts`, `app.js`, `server.js`
-**Key checks:** `eval(req.body...)`, template injection in EJS/Pug, `child_process.exec` with user input, JWT `alg: none`, `helmet` missing, CORS `origin: '*'` with credentials, prototype pollution via `merge`/`extend`
-
-</details>
-
-<details>
-<summary>Go</summary>
-
-**Trigger patterns:** `go.mod`, `**/*.go`
-**Key checks:** `fmt.Sprintf` in SQL queries, `html/template` vs `text/template` misuse, `os/exec` with user input, hardcoded credentials, SSRF via `http.Get(userInput)`, path traversal in file serving
-
-</details>
-
----
-
-## Docker setup
+A standalone, driver-based **dependency security monitor**. Run it daily; it
+reads your lockfiles, asks [OSV.dev](https://osv.dev) what's vulnerable, diffs
+against yesterday, and reports only what changed.
 
 ```bash
-# Copy env template, set your passwords and API key
-cp .env.example .env
-
-# Start Neo4j + Redis (agent infra)
-docker compose up -d
-
-# Start everything including the agent
-docker compose --profile agent up -d
-
-# Neo4j browser UI — log in with username neo4j and your NEO4J_PASSWORD
-open http://localhost:7474
+brusky scan /path/to/project
 ```
 
-Docker will refuse to start if `NEO4J_PASSWORD` or `REDIS_PASSWORD` are not set in `.env`.
+```
+# Brusky Dependency Security Report
+
+**Dependencies:** 2 critical, 4 high, 6 medium — 12 new/worsened since last scan
+
+## New & worsened findings
+
+| | Package | Installed | Fix | Severity | Vulnerability | Status |
+|---|---|---|---|---|---|---|
+| 🔴 | `lodash` | 4.17.4 | 4.17.12 | Critical | GHSA-jf85-cpcp-j695 — Prototype Pollution | NEW |
+| 🔴 | `minimist` _dev/transitive_ | 1.2.0 | 1.2.6 | Critical | GHSA-xvch-5gv4-984h — Prototype Pollution | NEW |
+| 🟠 | `lodash` | 4.17.4 | 4.17.21 | High | GHSA-35jh-r3h4-6jhm — Command Injection | NEW |
+| … | | | | | | |
+```
 
 ---
 
-## Model configuration
+## What it does
 
-Model selection lives in `config/models.yaml`. Each agent in each phase can use a different model. No code changes needed to switch providers.
+- **Reads lockfiles, not manifests** — resolves *exact* installed versions,
+  including the full **transitive** dependency tree, where most CVEs actually live.
+- **Asks OSV.dev** — the canonical, free vulnerability database. No toolchain,
+  no API key, no vendor lock-in.
+- **Diffs against a baseline** — a local SQLite file remembers what it has seen,
+  so a daily run surfaces only **new / worsened** findings instead of the whole
+  backlog. Alert fatigue is the enemy.
+- **Computes real severity** — derives CVSS v3.1 base scores from advisory
+  vectors, so `--fail-on high` means something in CI.
+- **Stays out of your way** — a CLI you schedule from cron/CI. No server, no
+  Neo4j, no Redis, no daemon.
 
-```yaml
-# Use a local Ollama model for everything
-default:
-  provider: ollama
-  model: llama3:70b
-  api_base: http://host.docker.internal:11434
+> **Detection is 100% deterministic and needs no API key.** With a provider
+> configured, an optional LLM layer adds a per-finding **explainer** (why it's
+> broken, the impact) and **fix guidance** (what to change) — fed real upstream
+> changelogs and your actual call sites, never trusted to invent them, always
+> with a confidence rating and cited sources. With no key it's silently skipped.
 
-# Or mix: cheap model for routing, expensive for logic flaws
-analysis:
-  logic_flaw_detector:
-    model: claude-opus-4-6     # most reasoning-intensive task
-  controller:
-    model: claude-haiku-4-5-20251001   # routing decision — fast + cheap
+---
+
+## Quick start
+
+Requires Python 3.12+.
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+
+brusky scan .                     # Markdown report of new/worsened vulns
+brusky scan . --all               # include the known backlog too
+brusky scan . --json > out.json   # machine-readable (logs go to stderr)
+brusky scan . --fail-on critical  # exit 1 if a new critical appears (for CI)
 ```
 
-**Supported providers** (via LiteLLM):
+| Flag | Effect |
+|---|---|
+| `--json` | JSON instead of Markdown |
+| `--all` | Show all findings, not just new/worsened |
+| `--only npm,composer` | Restrict to specific ecosystems |
+| `--explain {auto,all,none}` | LLM explainer + fix guidance: `auto` (default) = new High/Critical, `all` = everything, `none` = off |
+| `--explain-top N` | Cap how many findings the LLM enriches |
+| `--no-llm` | Disable the LLM layer entirely |
+| `--db FILE` | State DB path (default `~/.brusky/state.db`) |
+| `--fail-on {none,low,medium,high,critical}` | Non-zero exit on a new finding at/above this severity |
+| `--verbose` | Log progress to stderr |
 
-| Provider | Example model | Key env var |
+Full reference: [docs/usage.md](docs/usage.md).
+
+---
+
+## Supported ecosystems
+
+| Ecosystem | Reads | Advisory source | Status |
+|---|---|---|---|
+| **Composer** (PHP) | `composer.lock` + `composer.json` | OSV.dev (`Packagist`) | ✅ |
+| **npm** (JS/TS) | `package-lock.json` (v1 / v2 / v3) | OSV.dev (`npm`) | ✅ |
+| **Docker** base images | `Dockerfile` `FROM` instructions | endoflife.date | ✅ |
+
+Docker support flags **end-of-life** base-image cycles (no more security
+patches) and **unpinned** `latest` tags; digest-pinned images are treated as
+good practice. Full image CVE scanning (Trivy) is a later milestone.
+
+Adding an ecosystem is a new **collector**; changing the vulnerability source is
+a new **advisory** driver. See [docs/architecture.md](docs/architecture.md#the-two-driver-families).
+
+---
+
+## Schedule it (the "daily" part)
+
+Brusky has no daemon — you invoke it from a scheduler. A GitHub Actions cron that
+persists the state DB so only new findings surface:
+
+```yaml
+on:
+  schedule: [{ cron: "0 6 * * *" }]
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/cache@v4
+        with: { path: ~/.brusky, key: brusky-state-${{ github.repository }} }
+      - run: pip install -e .
+      - run: brusky scan . --fail-on high
+```
+
+More (system cron, exit codes, state management): [docs/usage.md](docs/usage.md).
+
+---
+
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [docs/usage.md](docs/usage.md) | Install, run, read the report, schedule in CI |
+| [docs/architecture.md](docs/architecture.md) | Pipeline, modules, data model, the two driver families |
+| [docs/decisions.md](docs/decisions.md) | The rewrite path: why pivot, key decisions, what changed, roadmap |
+
+---
+
+## Roadmap
+
+| Milestone | Scope | Status |
 |---|---|---|
-| `anthropic` | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY` |
-| `openai` | `gpt-4o` | `OPENAI_API_KEY` |
-| `groq` | `llama3-70b-8192` | `GROQ_API_KEY` |
-| `mistral` | `mistral-large-latest` | `MISTRAL_API_KEY` |
-| `ollama` | `llama3:70b` | — (no key, set `OLLAMA_API_BASE`) |
-| `azure` | `azure/<deployment>` | `AZURE_API_KEY` + `AZURE_API_BASE` |
-| `bedrock` | `bedrock/anthropic.claude-3-5-sonnet-...` | AWS credentials |
+| **M1** | Composer + npm collectors, OSV + CVSS, SQLite diff, Markdown/JSON report, CLI | ✅ Done |
+| **M2** | Docker base-image freshness (endoflife.date), dev-dep/reachability deprioritization | ✅ Done |
+| **M3** | LLM explainer + fix guidance — changelog fetch + call-site grep + advisor with confidence and source links | ✅ Done |
+| **M4** | Packaging polish: example config, docs finalization | In progress |
+
+> **History:** Brusky was previously a 5-phase LLM security-audit *agent*
+> (FastAPI + Neo4j + Redis + Bitbucket webhooks). It was rewritten into the
+> focused tool above; the [decisions doc](docs/decisions.md) explains why and how.
+
+---
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest          # unit tests + one live-OSV-shaped path (mocked)
+ruff check src/brusky tests
+```
 
 ---
 

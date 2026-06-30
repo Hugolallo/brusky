@@ -11,19 +11,13 @@ import yaml
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 # ── Pydantic settings (reads .env + environment) ──────────────────────────────
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Infrastructure
-    neo4j_uri: str = Field("bolt://localhost:7687", alias="NEO4J_URI")
-    neo4j_user: str = Field("neo4j", alias="NEO4J_USER")
-    neo4j_password: str = Field("brusky_secret", alias="NEO4J_PASSWORD")
-    redis_url: str = Field("redis://localhost:6379/0", alias="REDIS_URL")
-
-    # LLM fallback (overridden by models.yaml)
+    # LLM fallback (overridden by models.yaml) — only used by the optional
+    # fix-guidance layer. Detection works with none of these set.
     llm_provider: str = Field("anthropic", alias="LLM_PROVIDER")
     llm_model: str = Field("claude-sonnet-4-6", alias="LLM_MODEL")
 
@@ -37,14 +31,8 @@ class Settings(BaseSettings):
     azure_api_base: str = Field("", alias="AZURE_API_BASE")
     azure_api_version: str = Field("2024-02-01", alias="AZURE_API_VERSION")
 
-    # Output channels
-    slack_webhook_url: str = Field("", alias="SLACK_WEBHOOK_URL")
+    # GitHub token — used by the changelog fetcher (M3) to avoid rate limits.
     github_token: str = Field("", alias="GITHUB_TOKEN")
-
-    # Bitbucket integration
-    bitbucket_webhook_secret: str = Field("", alias="BITBUCKET_WEBHOOK_SECRET")
-    bitbucket_access_token: str = Field("", alias="BITBUCKET_ACCESS_TOKEN")
-    bitbucket_workspace: str = Field("", alias="BITBUCKET_WORKSPACE")
 
     brusky_env: str = Field("development", alias="BRUSKY_ENV")
 
