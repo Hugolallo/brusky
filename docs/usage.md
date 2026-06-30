@@ -30,9 +30,11 @@ endoflife.date.
 | `--json` | Emit JSON instead of Markdown (stable shape for CI). |
 | `--all` | Show all findings, not just NEW/worsened ones. |
 | `--only npm,composer` | Restrict to specific ecosystems. |
+| `--explain {auto,all,none}` | LLM explainer + fix guidance. `auto` (default) = new High/Critical findings; `all` = every finding; `none` = off. |
+| `--explain-top N` | Cap how many findings the LLM enriches (0 = no cap). |
+| `--no-llm` | Disable the LLM layer entirely (same as `--explain none`). |
 | `--db FILE` | State DB path (default `~/.brusky/state.db`). |
 | `--fail-on {none,low,medium,high,critical}` | Exit non-zero if a NEW finding meets/exceeds this severity. Default `none`. |
-| `--no-llm` | Skip the LLM fix-guidance layer (roadmap M3; accepted now for forward-compat). |
 | `--verbose` | Log progress to stderr. |
 
 > Logs always go to **stderr**, so `brusky scan . --json > report.json` produces
@@ -108,9 +110,27 @@ jobs:
 0 6 * * *  cd /path/to/project && /path/to/.venv/bin/brusky scan . --json >> /var/log/brusky.jsonl 2>>/var/log/brusky.err
 ```
 
+## The explainer + fix-guidance layer (optional)
+
+With an LLM provider configured, Brusky adds a collapsible block under each
+enriched finding: **why it's vulnerable**, the **impact**, a **severity
+rationale**, the **upgrade move**, **breaking changes** (only those found in the
+real upstream changelog), **code touchpoints** (only call sites actually found
+in your repo), plus an **effort** estimate, a **confidence** rating, and cited
+**sources**. It never edits code — it's advisory text you verify.
+
+- **Scope** is controlled by `--explain` (default `auto` = new High/Critical) and
+  `--explain-top N`.
+- **Caching:** guidance is stored in the state DB keyed by the finding and its
+  versions, so daily reruns only call the LLM when something actually changed.
+- **Provider/model** come from `config/models.yaml` (`fix_guidance.advisor`),
+  defaulting to the global default. Set `GITHUB_TOKEN` to raise the GitHub API
+  rate limit used for changelog fetching.
+
 ## No API key required
 
-Detection works with no LLM provider configured. API keys
-(`ANTHROPIC_API_KEY`, etc.) and `GITHUB_TOKEN` are only consulted by the optional
-fix-guidance layer (roadmap M3). See [decisions.md](decisions.md) for why
-detection is kept deterministic.
+Detection works with no LLM provider configured. If no key is set (or with
+`--no-llm` / `--explain none`), the explainer layer is silently skipped and the
+report renders exactly as it does without it. API keys (`ANTHROPIC_API_KEY`,
+etc.) and `GITHUB_TOKEN` are only consulted by this layer. See
+[decisions.md](decisions.md) for why detection is kept deterministic.

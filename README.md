@@ -39,10 +39,11 @@ brusky scan /path/to/project
 - **Stays out of your way** — a CLI you schedule from cron/CI. No server, no
   Neo4j, no Redis, no daemon.
 
-> **Detection is 100% deterministic and needs no API key.** The LLM is reserved
-> for an optional fix-guidance layer (see [roadmap](#roadmap)) that explains what
-> code to change to upgrade — and is fed real upstream changelogs, never trusted
-> to invent them.
+> **Detection is 100% deterministic and needs no API key.** With a provider
+> configured, an optional LLM layer adds a per-finding **explainer** (why it's
+> broken, the impact) and **fix guidance** (what to change) — fed real upstream
+> changelogs and your actual call sites, never trusted to invent them, always
+> with a confidence rating and cited sources. With no key it's silently skipped.
 
 ---
 
@@ -65,6 +66,9 @@ brusky scan . --fail-on critical  # exit 1 if a new critical appears (for CI)
 | `--json` | JSON instead of Markdown |
 | `--all` | Show all findings, not just new/worsened |
 | `--only npm,composer` | Restrict to specific ecosystems |
+| `--explain {auto,all,none}` | LLM explainer + fix guidance: `auto` (default) = new High/Critical, `all` = everything, `none` = off |
+| `--explain-top N` | Cap how many findings the LLM enriches |
+| `--no-llm` | Disable the LLM layer entirely |
 | `--db FILE` | State DB path (default `~/.brusky/state.db`) |
 | `--fail-on {none,low,medium,high,critical}` | Non-zero exit on a new finding at/above this severity |
 | `--verbose` | Log progress to stderr |
@@ -131,7 +135,7 @@ More (system cron, exit codes, state management): [docs/usage.md](docs/usage.md)
 |---|---|---|
 | **M1** | Composer + npm collectors, OSV + CVSS, SQLite diff, Markdown/JSON report, CLI | ✅ Done |
 | **M2** | Docker base-image freshness (endoflife.date), dev-dep/reachability deprioritization | ✅ Done |
-| **M3** | LLM fix guidance — changelog fetch + call-site grep + advisor with confidence and source links | Planned |
+| **M3** | LLM explainer + fix guidance — changelog fetch + call-site grep + advisor with confidence and source links | ✅ Done |
 | **M4** | Packaging polish: example config, docs finalization | In progress |
 
 > **History:** Brusky was previously a 5-phase LLM security-audit *agent*

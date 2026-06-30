@@ -88,6 +88,27 @@ class Vulnerability:
 
 
 @dataclass
+class FixGuidance:
+    """The optional LLM explainer + upgrade guidance for a finding (M3).
+
+    Produced by `fixguide/` from real advisory + changelog + call-site data.
+    Never part of detection; absent unless the LLM layer ran. `confidence`
+    reflects how much was grounded in fetched facts vs. inferred.
+    """
+
+    why_vulnerable: str = ""
+    impact: str = ""
+    severity_rationale: str = ""
+    upgrade_summary: str = ""
+    breaking_changes: list[str] = field(default_factory=list)
+    code_touchpoints: list[dict] = field(default_factory=list)  # {file, line, note}
+    effort: str = ""                          # trivial | moderate | significant
+    confidence: str = ""                      # high | medium | low
+    sources: list[str] = field(default_factory=list)
+    model: str = ""
+
+
+@dataclass
 class Finding:
     """A vulnerability matched to an installed dependency, plus rank + diff state."""
 
@@ -96,6 +117,7 @@ class Finding:
     reachable: bool | None = None             # None = not analyzed yet
     status: str = "EXISTING"                  # NEW | EXISTING | WORSENED
     first_seen: str = ""                       # ISO timestamp, filled from state
+    guidance: FixGuidance | None = None        # set only if the M3 LLM layer ran
 
     @property
     def key(self) -> str:

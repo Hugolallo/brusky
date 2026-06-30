@@ -69,8 +69,12 @@ All under `src/brusky/`:
 | `state.py` | SQLite baseline. `classify()` sets NEW/WORSENED/EXISTING; `record()` persists. |
 | `report.py` | Renders `ScanResult` to Markdown (NEW-first, backlog collapsed) or JSON. |
 | `scan.py` | `run_scan()` — wires collect → match → diff into a `ScanResult`. `_match_advisories()` routes each ecosystem to its advisory driver (OSV vs. endoflife) and merges results. |
-| `__main__.py` | The `brusky` CLI. Routes logs to stderr so stdout stays clean. |
-| `llm/provider.py` | Salvaged LiteLLM wrapper, reserved for the M3 fix-guidance layer. |
+| `fixguide/changelog.py` | Resolves a package's GitHub repo (npm registry / Packagist) and fetches release notes in the upgrade window. |
+| `fixguide/callsites.py` | Greps the repo for where a package is imported/used (precise for npm, approximate for Composer). |
+| `fixguide/advisor.py` | One structured LLM call → `FixGuidance`; drops any touchpoint not in the supplied call sites. |
+| `fixguide/runner.py` | `enrich()` — selects findings, reuses the guidance cache, gathers facts, calls the advisor with bounded concurrency. |
+| `__main__.py` | The `brusky` CLI. Routes logs to stderr so stdout stays clean; runs `enrich()` after the scan when an LLM is configured. |
+| `llm/provider.py` | Salvaged LiteLLM wrapper, used by `fixguide/advisor.py`. |
 | `config.py` | Pydantic settings (LLM keys + `GITHUB_TOKEN`) and `models.yaml` loading. |
 
 ## Key data structures

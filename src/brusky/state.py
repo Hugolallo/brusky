@@ -14,10 +14,12 @@ the same backlog every morning. Stdlib sqlite3 only — zero infra.
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import sqlite3
 from pathlib import Path
 
-from brusky.model import Finding
+from brusky.model import Finding, FixGuidance
 
 _DEFAULT_DB = Path.home() / ".brusky" / "state.db"
 
@@ -29,6 +31,14 @@ CREATE TABLE IF NOT EXISTS findings (
     first_seen  TEXT NOT NULL,
     last_seen   TEXT NOT NULL,
     PRIMARY KEY (target, key)
+);
+CREATE TABLE IF NOT EXISTS guidance (
+    target      TEXT NOT NULL,
+    key         TEXT NOT NULL,
+    installed   TEXT NOT NULL,
+    fixed       TEXT NOT NULL,
+    json        TEXT NOT NULL,
+    PRIMARY KEY (target, key, installed, fixed)
 );
 """
 
@@ -87,4 +97,31 @@ class State:
                 """,
                 (target, f.key, int(f.severity), f.first_seen or now, now),
             )
+        self._conn.commit()
+
+    # ── M3 guidance cache ────────────────────────────────────────────────────
+
+    def get_guidance(
+        self, target: str, key: str, installed: str, fixed: str
+    ) -> FixGuidance | None:
+        """Return cached guidance for this exact (finding, versions), if any."""
+        row = self._conn.execute(
+            "SELECT json FROM guidance WHERE target=? AND key=? AND installed=? AND fixed=?",
+            (target, key, installed, fixed),
+        ).fetchone()
+        if row is None:
+            return None
+        return FixGuidance(**json.loads(row["json"]))
+
+    def save_guidance(
+        self, target: str, key: str, installed: str, fixed: str, guidance: FixGuidance
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO guidance (target, key, installed, fixed, json)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(target, key, installed, fixed) DO UPDATE SET json = excluded.json
+            """,
+            (target, key, installed, fixed, json.dumps(dataclasses.asdict(guidance))),
+        )
         self._conn.commit()

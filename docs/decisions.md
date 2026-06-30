@@ -92,5 +92,38 @@ out-detect the incumbents.
 |---|---|---|
 | **M1** | Deterministic core: composer + npm collectors, OSV client + CVSS, SQLite diff, Markdown/JSON report, CLI | ✅ Done, tested vs live OSV |
 | **M2** | Docker base-image freshness (endoflife.date), dev-dep/reachability deprioritization | ✅ Done, tested vs live endoflife.date |
-| **M3** | LLM fix guidance: changelog fetch + call-site grep + advisor (confidence + source links) | Planned |
+| **M3** | LLM explainer + fix guidance: changelog fetch + call-site grep + advisor (confidence + source links) | ✅ Done |
 | **M4** | Packaging polish: `brusky.example.yml` rewrite, README/docs finalization, retire old `docs-local/` + audit skills | In progress |
+
+## M3 spec: the explainer + fix-guidance layer
+
+M3 adds an *optional* layer that runs **after** the deterministic report and, for
+the findings worth acting on, produces a per-finding explainer (why it's broken,
+the impact, why it's rated as it is) **and** upgrade guidance (what to change),
+as a single structured LLM call. It never changes detection.
+
+**Trust mechanics (non-negotiable):**
+- Facts are *fed, not recalled* — the prompt carries the real advisory text, the
+  real upstream changelog, and the real grepped call sites. The model may cite
+  only breaking changes present in the supplied changelog and reference only the
+  files/lines supplied.
+- Confidence tracks grounding (no changelog → lower confidence, stated).
+- Facts (cited) and inference (reasoning about your code) are rendered separately.
+- Never auto-applies; output is advisory text with source links.
+
+**Defaults (decided):**
+- Scope: enrich **NEW findings at High/Critical** (`--explain auto`); `--explain all`
+  enriches everything, `--explain none` / `--no-llm` / no API key → report renders
+  exactly as M2.
+- Optional `--explain-top N` cost ceiling.
+- Rendering: a collapsible `<details>` block **inline under each enriched row**.
+- Caching: guidance is cached in SQLite by `(finding.key, installed, fixed)`, so a
+  daily rerun only calls the LLM when a finding's versions change.
+
+**Modules:** `fixguide/changelog.py` (GitHub Releases via `GITHUB_TOKEN`),
+`fixguide/callsites.py` (import/use grep), `fixguide/advisor.py` (LLM →
+`FixGuidance`), `fixguide/enrich.py` (select → cache → orchestrate).
+
+**Edge cases:** transitive deps → "bump the parent / add an override" instead of
+code edits; Docker EOL → explain the base-image bump, skip call-site grep; no
+changelog/call sites → say so and lower confidence.
