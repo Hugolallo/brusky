@@ -28,6 +28,7 @@ endoflife.date.
 | Flag | Effect |
 |---|---|
 | `--json` | Emit JSON instead of Markdown (stable shape for CI). |
+| `--html [FILE]` | Also write a self-contained visual HTML report (default `brusky-report.html`). Open it by double-clicking — no server, no build step, no network. |
 | `--all` | Show all findings, not just NEW/worsened ones. |
 | `--only npm,composer` | Restrict to specific ecosystems. |
 | `--explain {auto,all,none}` | LLM explainer + fix guidance. `auto` (default) = new High/Critical findings; `all` = every finding; `none` = off. |
@@ -61,6 +62,36 @@ Findings are classified by diffing against the state DB:
 - **NEW** — first time this vulnerability has been seen for this package.
 - **WORSENED** — seen before, but its severity has increased.
 - **EXISTING** — already known at the same-or-lower severity.
+
+## The visual HTML report
+
+For a share-friendly, non-technical view of a scan, add `--html`:
+
+```bash
+brusky scan . --html                 # writes ./brusky-report.html
+brusky scan . --html report.html     # or a path of your choice
+```
+
+The result is a **single, self-contained `.html` file** — all styling and
+interactivity are inlined, so there is nothing to install and no server to run.
+Double-click it to open in any browser (it works straight off the filesystem).
+It shows:
+
+- a **risk posture** headline (Clean / Low / Moderate / High / Critical) and the
+  total count of vulnerable dependencies;
+- a **severity breakdown** bar plus stat tiles for new/worsened, already-known,
+  fixable, reachable-in-code, and AI-explained findings;
+- one **card per finding** with the installed → fix version, severity, status,
+  `dev`/`transitive`/`reachable` tags, CVSS, and a link to the advisory;
+- the **AI explainer & upgrade guidance** (when the LLM layer ran) inline in a
+  collapsible block per finding;
+- live **filters** — by severity, ecosystem, new-only, and free-text search —
+  and a light/dark theme toggle.
+
+`--html` is additive: it writes the file *and* still prints the Markdown (or
+JSON, with `--json`) report to stdout, so it composes with CI piping. The
+"HTML report written to …" confirmation goes to **stderr**. It always renders
+the full finding set (not just new ones), regardless of `--all`.
 
 ## State & the daily diff
 

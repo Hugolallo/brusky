@@ -46,6 +46,15 @@ def main(argv: list[str] | None = None) -> int:
     scan = sub.add_parser("scan", help="Scan a project for vulnerable dependencies.")
     scan.add_argument("path", nargs="?", default=".", help="Project directory (default: .)")
     scan.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown.")
+    scan.add_argument(
+        "--html",
+        nargs="?",
+        const="brusky-report.html",
+        default=None,
+        metavar="FILE",
+        help="Also write a self-contained visual HTML report (default: "
+        "brusky-report.html). Open it by double-clicking — no server needed.",
+    )
     scan.add_argument("--all", action="store_true", help="Show all findings, not just new ones.")
     scan.add_argument("--only", default="", help="Comma-separated ecosystems (e.g. npm,composer).")
     scan.add_argument(
@@ -93,6 +102,9 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     finally:
         state.close()
 
+    if args.html is not None:
+        _write_html(result, args.html)
+
     output = (
         report.to_json(result)
         if args.json
@@ -101,6 +113,21 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     print(output)
 
     return _exit_code(result, args.fail_on)
+
+
+def _write_html(result: ScanResult, path: str) -> None:
+    """Write the visual HTML report, logging the path to stderr (never stdout).
+
+    Kept off the happy path's return value so a filesystem error here can't
+    swallow the report on stdout or the CI exit code.
+    """
+    out = Path(path)
+    try:
+        out.write_text(report.to_html(result), encoding="utf-8")
+    except OSError as exc:
+        print(f"warning: could not write HTML report to {out}: {exc}", file=sys.stderr)
+        return
+    print(f"HTML report written to {out.resolve()}", file=sys.stderr)
 
 
 def _maybe_enrich(

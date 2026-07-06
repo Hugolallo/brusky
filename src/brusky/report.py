@@ -10,7 +10,10 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 
+from brusky.htmlreport import to_html
 from brusky.model import Finding, ScanResult, Severity
+
+__all__ = ["to_html", "to_json", "to_markdown"]
 
 _SEV_ICON = {
     Severity.CRITICAL: "🔴",

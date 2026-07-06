@@ -58,12 +58,14 @@ pip install -e .
 brusky scan .                     # Markdown report of new/worsened vulns
 brusky scan . --all               # include the known backlog too
 brusky scan . --json > out.json   # machine-readable (logs go to stderr)
+brusky scan . --html              # + a visual report you can double-click open
 brusky scan . --fail-on critical  # exit 1 if a new critical appears (for CI)
 ```
 
 | Flag | Effect |
 |---|---|
 | `--json` | JSON instead of Markdown |
+| `--html [FILE]` | Also write a self-contained visual HTML report (default `brusky-report.html`) — open in any browser, no server |
 | `--all` | Show all findings, not just new/worsened |
 | `--only npm,composer` | Restrict to specific ecosystems |
 | `--explain {auto,all,none}` | LLM explainer + fix guidance: `auto` (default) = new High/Critical, `all` = everything, `none` = off |
